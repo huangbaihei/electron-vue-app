@@ -110,24 +110,42 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
       const start = () => {
         // 读取文件
         // const sourcePath = '/Users/huangqier/Downloads/待处理表2.xlsx'
-        logText(`共接收到${sourceLength}个xlsx源文件，正在读取第${sourceIndex}个...\n`)
-        const file = fs.readFileSync(sourcePath)
-        logText(`成功读取xlsx源文件，开始使用node-xlsx解析...\n`)
-        const workSheetsFromBuffer = xlsx.parse(file)
-        if (!workSheetsFromBuffer || !workSheetsFromBuffer.length) {
-          return reject(logError(new Error(`第${sourceIndex}个excel文件解析失败，可能是空文件或者文件太大`)))
-        }
-        logText(`成功解析xlsx源文件，共有${workSheetsFromBuffer.length}个sheet，开始进入拆分处理流程\n`)
-        // 输出到控制台
-        // console.log(workSheetsFromBuffer);
-        // console.log(workSheetsFromBuffer[0].data);
-        // 只处理一个sheet
-        // const table = workSheetsFromBuffer[0].data
-        // handleTableSheet(table)
-        // 处理多个sheet
-        for (let i = 0; i < workSheetsFromBuffer.length; i++) {
-          logText(`开始处理第${i + 1}个sheet...\n`)
-          handleTableSheet(workSheetsFromBuffer[i].data)
+        logText(`共接收到${sourceLength}个源文件，正在读取第${sourceIndex}个...\n`)
+        const buffer = fs.readFileSync(sourcePath)
+        if (/(\.xlsx)$/.test(sourcePath)) {
+          // 如果接收的是xlsx则用node-xlsx库进行解析
+          logText(`成功读取xlsx源文件，开始使用node-xlsx解析...\n`)
+          const workSheetsFromBuffer = xlsx.parse(buffer)
+          if (!workSheetsFromBuffer || !workSheetsFromBuffer.length) {
+            return reject(logError(new Error(`第${sourceIndex}个excel文件解析失败，可能是空文件或者文件太大`)))
+          }
+          logText(`成功解析xlsx源文件，共有${workSheetsFromBuffer.length}个sheet，开始进入拆分处理流程\n`)
+          // 输出到控制台
+          // console.log(workSheetsFromBuffer);
+          // console.log(workSheetsFromBuffer[0].data);
+          // 只处理一个sheet
+          // const table = workSheetsFromBuffer[0].data
+          // handleTableSheet(table)
+          // 处理多个sheet
+          for (let i = 0; i < workSheetsFromBuffer.length; i++) {
+            logText(`开始处理第${i + 1}个sheet...\n`)
+            console.log(workSheetsFromBuffer[i].data)
+            handleTableSheet(workSheetsFromBuffer[i].data)
+          }
+        } else if (/\.csv/.test(sourcePath)) {
+          // 如果接收的是csv则直接读取文件
+          const convertToTable = (data) => {
+            data = data.toString()
+            const table = []
+            const rows = data.split('\r\n')
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i].split(',')
+              row[0] && table.push(row)
+            }
+            return table
+          }
+          console.log(convertToTable(buffer))
+          // handleTableSheet(convertToTable(buffer))
         }
       }
       start()
