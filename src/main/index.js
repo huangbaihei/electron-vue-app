@@ -20,9 +20,9 @@ function createWindow () {
    * Initial window options
    */
   mainWindow = new BrowserWindow({
-    height: 800,
+    height: 750,
     useContentSize: true,
-    width: 1000
+    width: 870
   })
 
   mainWindow.loadURL(winURL)
@@ -65,3 +65,30 @@ app.on('ready', () => {
   if (process.env.NODE_ENV === 'production') autoUpdater.checkForUpdates()
 })
  */
+
+const isWin = /^win/.test(process.platform)
+console.log(process.platform)
+const path = require('path')
+
+let pyProc = null
+
+const createPyProc = () => {
+  let port = '4242'
+  let script = path.resolve(__dirname, 'go', isWin ? 'testGo.exe' : 'testGo')
+  if (process.env.NODE_ENV === 'production') {
+    script = path.join(process.resourcesPath, 'app.asar.unpacked/go', isWin ? 'testGo.exe' : 'testGo')
+  }
+  console.log(script)
+  pyProc = require('child_process').execFile(script, [port])
+  if (pyProc != null) {
+    console.log('child process success')
+  }
+}
+
+const exitPyProc = () => {
+  pyProc.kill()
+  pyProc = null
+}
+
+app.on('ready', createPyProc)
+app.on('will-quit', exitPyProc)

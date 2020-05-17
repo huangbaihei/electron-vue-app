@@ -4,7 +4,7 @@ const fs = require('fs')
 let totalApplyNum = 0
 let totalFileNum = 0
 
-export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folderPath, log) {
+export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folderPath, log, fileLength) {
   const logText = (text) => {
     console.log(text)
     log.text = text
@@ -26,6 +26,18 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
       let header = []
       let tableContainer = []
       const handleTableSheet = (table) => {
+        // 进行空行和编号校验
+        const emptyOrderAccouts = []
+        for (let i = table.length - 1; i >= 0; i--) {
+          if (table[i].every(x => !x)) {
+            table.splice(i, 1)
+          } else if ((!table[i][9] || table[i][9] === '#N/A') && !emptyOrderAccouts.includes(table[i][0])) {
+            emptyOrderAccouts.push(table[i][0])
+          }
+        }
+        if (emptyOrderAccouts.length) {
+          return reject(logError(new Error(`处理中断，因为第${sourceIndex}个表账号${emptyOrderAccouts.join('、')}的编号是空的`)))
+        }
         // 删掉不需要的列
         const deleteList = [4, 7, 8, 9]
         const deleteCloumn = (row) => {
@@ -51,6 +63,16 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
           }
           return row
         }
+        const formatRowItem = row => {
+          if (String(row[1]).indexOf('-') > -1) {
+            // 如果是月-日-年的时间格式则处理成excel的时间戳，计算公式(秒时间戳+8*3600)/86400+70*365+19
+            row[1] = (Number(new Date(row[1])) / 1000 + 8 * 3600) / 86400 + 70 * 365 + 19
+          }
+          row[2] = Number(row[2])
+          row[5] = Number(row[5])
+          return row
+        }
+        // 如果金额是字符串则转成
         header = [changePosition(deleteCloumn(table[0]))]
         tableContainer = table.slice(1)
         const handleTable = (table) => {
@@ -70,7 +92,7 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
                 break
               }
             }
-            let output = [...commonHeader, ...header, ...table.slice(0, breakPoint || undefined).map(x => changePosition(deleteCloumn(x)))]
+            let output = [...commonHeader, ...header, ...table.slice(0, breakPoint || undefined).map(x => formatRowItem(changePosition(deleteCloumn(x))))]
             const folderName = '账户对账单'
             const subFolderName = `${order}${name}`
             const fileName = `${order}交易流水${name}`
@@ -98,7 +120,7 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
           } else {
             // logText(`第${sourceIndex}个文件处理结束，提交${applyNum}个任务，生成${fileNum}个xlsx文件\n`)
             if (sourceLength === sourceIndex) {
-              logText(`程序结束，共处理了${sourceLength}个文件，共提交${totalApplyNum}个任务，共生成${totalFileNum}个xlsx文件\n`)
+              logText(`处理了${fileLength}个文件，共${sourceLength}个工作表，共生成${totalFileNum}个xlsx文件，开始批量处理格式...\n`)
               totalApplyNum = 0
               totalFileNum = 0
             }
@@ -111,8 +133,8 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
         // 读取文件
         // const sourcePath = '/Users/huangqier/Downloads/待处理表2.xlsx'
         logText(`共接收到${sourceLength}个源文件，正在读取第${sourceIndex}个...\n`)
-        const buffer = fs.readFileSync(sourcePath)
-        if (/(\.xlsx)$/.test(sourcePath)) {
+        if (typeof sourcePath === 'string' && /(\.xlsx)$/.test(sourcePath)) {
+          const buffer = fs.readFileSync(sourcePath)
           // 如果接收的是xlsx则用node-xlsx库进行解析
           logText(`成功读取xlsx源文件，开始使用node-xlsx解析...\n`)
           const workSheetsFromBuffer = xlsx.parse(buffer)
@@ -132,8 +154,9 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
             console.log(workSheetsFromBuffer[i].data)
             handleTableSheet(workSheetsFromBuffer[i].data)
           }
-        } else if (/\.csv/.test(sourcePath)) {
+        } else if (typeof sourcePath === 'string' && /\.csv/.test(sourcePath)) {
           // 如果接收的是csv则直接读取文件
+          const buffer = fs.readFileSync(sourcePath)
           const convertToTable = (data) => {
             data = data.toString()
             const table = []
@@ -146,6 +169,9 @@ export default function splitXlsx (sourcePath, sourceIndex, sourceLength, folder
           }
           console.log(convertToTable(buffer))
           // handleTableSheet(convertToTable(buffer))
+        } else {
+          // 如果传进来的是解析好的数组
+          handleTableSheet(sourcePath)
         }
       }
       start()

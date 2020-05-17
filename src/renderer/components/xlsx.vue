@@ -1,19 +1,19 @@
 <template>
   <div class="xlsx">
     <div class="form-item">
-      <div class="form-title">1、确认excel表列字段顺序</div>
+      <div class="form-title">1、确认excel表列字段名和顺序</div>
       <div class="form-input">
-        <div>账户号 交易描述 卡号 交易日期 币种 交易金额 余额 名字 证件号码 序号</div>
+        <div>账户号 交易描述 卡号 交易日期 币种 交易金额 余额 名字 证件号码 编号</div>
       </div>
     </div>
-    <div class="form-item">
+    <!-- <div class="form-item">
       <div class="form-title">2、手动拆分excel表成多个文件</div>
       <div class="form-input">
         <div>每个文件不能大于30M，30M大约40万行</div>
       </div>
-    </div>
+    </div> -->
     <div class="form-item">
-      <div class="form-title">3、选择手动拆分好的excel文件</div>
+      <div class="form-title">2、选择需要处理的excel文件</div>
       <div class="form-input">
         <el-upload
           ref="elUploadFile"
@@ -32,7 +32,7 @@
       </div>
     </div>
     <div class="form-item">
-      <div class="form-title">4、选择放置输出excel文件的文件夹</div>
+      <div class="form-title">3、选择放置输出excel文件的文件夹</div>
       <div class="form-input">
         <el-upload
           class="el-upload-folder"
@@ -60,6 +60,7 @@ import { Button, Upload, Input, Message } from 'element-ui'
 import splitXlsx from './app-xlsx'
 const { shell } = require('electron')
 const os = require('os')
+const net = require('net')
 
 export default {
   components: {
@@ -112,19 +113,62 @@ export default {
         return false
       }
       this.isLoading = true
+      // this.log.text = '文件太大的话可能需要等待3-5分钟...'
       setTimeout(async () => {
-        for (let i = 0; i < this.sourcePathList.length; i++) {
-          await splitXlsx(
-            this.sourcePathList[i],
-            i + 1,
-            this.sourcePathList.length,
-            this.folderPath,
-            this.log
-          ).catch(e => {
-            this.log.error = e
-          })
-        }
-        this.isLoading = false
+        // for (let i = 0; i < this.sourcePathList.length; i++) {
+        //   await splitXlsx(
+        //     this.sourcePathList[i],
+        //     i + 1,
+        //     this.sourcePathList.length,
+        //     this.folderPath,
+        //     this.log
+        //   ).catch(e => {
+        //     this.log.error = e
+        //   })
+        // }
+        // this.isLoading = false
+
+        let tcpData = ''
+        const client = net.connect({ port: 9800 })
+        // client.write(JSON.stringify(this.sourcePathList))
+        client.write(JSON.stringify([...this.sourcePathList, this.folderPath]))
+        client.on('data', async data => {
+          tcpData += data.toString()
+          if (tcpData.startsWith('[')) {
+            // 第一个通信会回抛数组
+            if (tcpData.endsWith('数据传输结束标记')) {
+              data = JSON.parse(tcpData.replace(/数据传输结束标记$/, ''))
+              for (let i = 0; i < data.length; i++) {
+                await splitXlsx(
+                  data[i],
+                  i + 1,
+                  data.length,
+                  this.folderPath,
+                  this.log,
+                  this.sourcePathList.length
+                ).catch(e => {
+                  this.log.error = e
+                  this.isLoading = false
+                })
+              }
+              tcpData = ''
+              // 处理完以后，传文件夹过去给go批量生成xlsx格式
+              client.write(this.folderPath)
+            }
+          } else {
+            // 之后的通信都是回抛处理状态
+            if (tcpData.startsWith('处理中断')) {
+              this.log.error = tcpData
+              this.isLoading = false
+            } else {
+              this.log.text = tcpData
+              if (this.log.text.startsWith('处理结束')) {
+                this.isLoading = false
+              }
+            }
+            tcpData = ''
+          }
+        })
       }, 1)
     },
     showItemInFolder () {
@@ -150,6 +194,7 @@ export default {
 <style lang="scss" scoped>
   .xlsx {
     height: 100vh;
+    padding: 0 50px;
     display: flex;
     flex-direction: column;
     align-items: center;

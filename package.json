@@ -11,6 +11,7 @@
     "build:clean": "cross-env BUILD_TARGET=clean node .electron-vue/build.js",
     "build:web": "cross-env BUILD_TARGET=web node .electron-vue/build.js",
     "build:win": "node .electron-vue/build.js && electron-builder --win --x64",
+    "build:win32": "node .electron-vue/build.js && electron-builder --win --ia32",
     "dev": "node .electron-vue/dev-runner.js",
     "e2e": "npm run pack && mocha test/e2e",
     "lint": "eslint --ext .js,.vue -f ./node_modules/eslint-friendly-formatter src test",
@@ -25,6 +26,12 @@
   "build": {
     "productName": "electron-vue",
     "appId": "com.example.yourapp",
+    "extraResources": [
+      {
+        "from": "src/main/go",
+        "to": "app.asar.unpacked/go"
+      }
+    ],
     "directories": {
       "output": "build"
     },
