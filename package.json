@@ -64,7 +64,7 @@
     }
   },
   "dependencies": {
-    "axios": "^0.18.0",
+    "axios": "^0.21.1",
     "element-ui": "^2.13.1",
     "node-xlsx": "^0.15.0",
     "vue": "^2.5.16",
